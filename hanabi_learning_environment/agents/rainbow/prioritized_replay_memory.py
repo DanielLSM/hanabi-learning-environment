@@ -29,24 +29,29 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from third_party.dopamine import sum_tree
+from hanabi_learning_environment.agents.rainbow.third_party.dopamine import sum_tree
 import gin.tf
 import numpy as np
-import replay_memory
+from hanabi_learning_environment.agents.rainbow import replay_memory
 import tensorflow as tf
 
 DEFAULT_PRIORITY = 100.0
 
 
 class OutOfGraphPrioritizedReplayMemory(replay_memory.OutOfGraphReplayMemory):
-  """An Out of Graph Replay Memory for Prioritized Experience Replay.
+    """An Out of Graph Replay Memory for Prioritized Experience Replay.
 
   See replay_memory.py for details.
   """
-
-  def __init__(self, num_actions, observation_size, stack_size, replay_capacity,
-               batch_size, update_horizon=1, gamma=1.0):
-    """This data structure does the heavy lifting in the replay memory.
+    def __init__(self,
+                 num_actions,
+                 observation_size,
+                 stack_size,
+                 replay_capacity,
+                 batch_size,
+                 update_horizon=1,
+                 gamma=1.0):
+        """This data structure does the heavy lifting in the replay memory.
 
     Args:
       num_actions: int, number of actions.
@@ -57,16 +62,19 @@ class OutOfGraphPrioritizedReplayMemory(replay_memory.OutOfGraphReplayMemory):
       update_horizon: int, length of update ('n' in n-step update).
       gamma: int, the discount factor.
     """
-    super(OutOfGraphPrioritizedReplayMemory, self).__init__(
-        num_actions=num_actions,
-        observation_size=observation_size, stack_size=stack_size,
-        replay_capacity=replay_capacity, batch_size=batch_size,
-        update_horizon=update_horizon, gamma=gamma)
+        super(OutOfGraphPrioritizedReplayMemory,
+              self).__init__(num_actions=num_actions,
+                             observation_size=observation_size,
+                             stack_size=stack_size,
+                             replay_capacity=replay_capacity,
+                             batch_size=batch_size,
+                             update_horizon=update_horizon,
+                             gamma=gamma)
 
-    self.sum_tree = sum_tree.SumTree(replay_capacity)
+        self.sum_tree = sum_tree.SumTree(replay_capacity)
 
-  def add(self, observation, action, reward, terminal, legal_actions):
-    """Adds a transition to the replay memory.
+    def add(self, observation, action, reward, terminal, legal_actions):
+        """Adds a transition to the replay memory.
 
     Since the next_observation in the transition will be the observation added
     next there is no need to pass it.
@@ -84,26 +92,40 @@ class OutOfGraphPrioritizedReplayMemory(replay_memory.OutOfGraphReplayMemory):
                  was terminal (1) or not (0).
       legal_actions: Binary vector indicating legal actions (1 == legal).
     """
-    if self.is_empty() or self.terminals[self.cursor() - 1] == 1:
-      dummy_observation = np.zeros((self._observation_size))
-      dummy_legal_actions = np.zeros((self._num_actions))
-      for _ in range(self._stack_size - 1):
-        self._add(dummy_observation, 0, 0, 0, dummy_legal_actions, priority=0.0)
+        if self.is_empty() or self.terminals[self.cursor() - 1] == 1:
+            dummy_observation = np.zeros((self._observation_size))
+            dummy_legal_actions = np.zeros((self._num_actions))
+            for _ in range(self._stack_size - 1):
+                self._add(dummy_observation,
+                          0,
+                          0,
+                          0,
+                          dummy_legal_actions,
+                          priority=0.0)
 
-    self._add(observation, action, reward, terminal, legal_actions,
-              priority=DEFAULT_PRIORITY)
+        self._add(observation,
+                  action,
+                  reward,
+                  terminal,
+                  legal_actions,
+                  priority=DEFAULT_PRIORITY)
 
-  def _add(self, observation, action, reward, terminal, legal_actions,
-           priority=DEFAULT_PRIORITY):
-    new_element_index = self.cursor()
+    def _add(self,
+             observation,
+             action,
+             reward,
+             terminal,
+             legal_actions,
+             priority=DEFAULT_PRIORITY):
+        new_element_index = self.cursor()
 
-    super(OutOfGraphPrioritizedReplayMemory, self)._add(
-        observation, action, reward, terminal, legal_actions)
+        super(OutOfGraphPrioritizedReplayMemory,
+              self)._add(observation, action, reward, terminal, legal_actions)
 
-    self.sum_tree.set(new_element_index, priority)
+        self.sum_tree.set(new_element_index, priority)
 
-  def sample_index_batch(self, batch_size):
-    """Returns a batch of valid indices.
+    def sample_index_batch(self, batch_size):
+        """Returns a batch of valid indices.
 
     Args:
       batch_size: int, number of indices returned.
@@ -114,37 +136,37 @@ class OutOfGraphPrioritizedReplayMemory(replay_memory.OutOfGraphReplayMemory):
     Raises:
       Exception: If the batch was not constructed after maximum number of tries.
     """
-    indices = []
-    allowed_attempts = replay_memory.MAX_SAMPLE_ATTEMPTS
+        indices = []
+        allowed_attempts = replay_memory.MAX_SAMPLE_ATTEMPTS
 
-    while len(indices) < batch_size and allowed_attempts > 0:
-      index = self.sum_tree.sample()
+        while len(indices) < batch_size and allowed_attempts > 0:
+            index = self.sum_tree.sample()
 
-      if self.is_valid_transition(index):
-        indices.append(index)
-      else:
-        allowed_attempts -= 1
+            if self.is_valid_transition(index):
+                indices.append(index)
+            else:
+                allowed_attempts -= 1
 
-    if len(indices) != batch_size:
-      raise Exception('Could only sample {} valid transitions'.format(
-          len(indices)))
-    else:
-      return indices
+        if len(indices) != batch_size:
+            raise Exception('Could only sample {} valid transitions'.format(
+                len(indices)))
+        else:
+            return indices
 
-  def set_priority(self, indices, priorities):
-    """Sets the priority of the given elements according to Schaul et al.
+    def set_priority(self, indices, priorities):
+        """Sets the priority of the given elements according to Schaul et al.
 
     Args:
       indices: `np.array` of indices in range [0, replay_capacity).
       priorities: list of floats, the corresponding priorities.
     """
-    assert indices.dtype == np.int32, ('Indices must be integers, '
-                                       'given: {}'.format(indices.dtype))
-    for i, memory_index in enumerate(indices):
-      self.sum_tree.set(memory_index, priorities[i])
+        assert indices.dtype == np.int32, ('Indices must be integers, '
+                                           'given: {}'.format(indices.dtype))
+        for i, memory_index in enumerate(indices):
+            self.sum_tree.set(memory_index, priorities[i])
 
-  def get_priority(self, indices, batch_size=None):
-    """Fetches the priorities correspond to a batch of memory indices.
+    def get_priority(self, indices, batch_size=None):
+        """Fetches the priorities correspond to a batch of memory indices.
 
     For any memory location not yet used, the corresponding priority is 0.
 
@@ -154,24 +176,24 @@ class OutOfGraphPrioritizedReplayMemory(replay_memory.OutOfGraphReplayMemory):
     Returns:
       The corresponding priorities.
     """
-    if batch_size is None:
-      batch_size = self._batch_size
-    if batch_size != self._state_batch.shape[0]:
-      self.reset_state_batch_arrays(batch_size)
+        if batch_size is None:
+            batch_size = self._batch_size
+        if batch_size != self._state_batch.shape[0]:
+            self.reset_state_batch_arrays(batch_size)
 
-    priority_batch = np.empty((batch_size), dtype=np.float32)
+        priority_batch = np.empty((batch_size), dtype=np.float32)
 
-    assert indices.dtype == np.int32, ('Indices must be integers, '
-                                       'given: {}'.format(indices.dtype))
-    for i, memory_index in enumerate(indices):
-      priority_batch[i] = self.sum_tree.get(memory_index)
+        assert indices.dtype == np.int32, ('Indices must be integers, '
+                                           'given: {}'.format(indices.dtype))
+        for i, memory_index in enumerate(indices):
+            priority_batch[i] = self.sum_tree.get(memory_index)
 
-    return priority_batch
+        return priority_batch
 
 
 @gin.configurable(blacklist=['observation_size', 'stack_size'])
 class WrappedPrioritizedReplayMemory(replay_memory.WrappedReplayMemory):
-  """In graph wrapper for the python Replay Memory.
+    """In graph wrapper for the python Replay Memory.
 
   Usage:
     To add a transition:  run the operation add_transition_op
@@ -202,17 +224,16 @@ class WrappedPrioritizedReplayMemory(replay_memory.WrappedReplayMemory):
     add_reward_ph
     add_terminal_ph
   """
-
-  def __init__(self,
-               num_actions,
-               observation_size,
-               stack_size,
-               use_staging=True,
-               replay_capacity=1000000,
-               batch_size=32,
-               update_horizon=1,
-               gamma=1.0):
-    """Initializes a graph wrapper for the python Replay Memory.
+    def __init__(self,
+                 num_actions,
+                 observation_size,
+                 stack_size,
+                 use_staging=True,
+                 replay_capacity=1000000,
+                 batch_size=32,
+                 update_horizon=1,
+                 gamma=1.0):
+        """Initializes a graph wrapper for the python Replay Memory.
 
     Args:
       num_actions: int, number of possible actions.
@@ -229,17 +250,24 @@ class WrappedPrioritizedReplayMemory(replay_memory.WrappedReplayMemory):
       ValueError: If update_horizon is not positive.
       ValueError: If discount factor is not in [0, 1].
     """
-    memory = OutOfGraphPrioritizedReplayMemory(num_actions, observation_size,
-                                               stack_size, replay_capacity,
-                                               batch_size, update_horizon,
-                                               gamma)
-    super(WrappedPrioritizedReplayMemory, self).__init__(
-        num_actions,
-        observation_size, stack_size, use_staging, replay_capacity, batch_size,
-        update_horizon, gamma, wrapped_memory=memory)
+        memory = OutOfGraphPrioritizedReplayMemory(num_actions,
+                                                   observation_size,
+                                                   stack_size, replay_capacity,
+                                                   batch_size, update_horizon,
+                                                   gamma)
+        super(WrappedPrioritizedReplayMemory,
+              self).__init__(num_actions,
+                             observation_size,
+                             stack_size,
+                             use_staging,
+                             replay_capacity,
+                             batch_size,
+                             update_horizon,
+                             gamma,
+                             wrapped_memory=memory)
 
-  def tf_set_priority(self, indices, losses):
-    """Sets the priorities for the given indices.
+    def tf_set_priority(self, indices, losses):
+        """Sets the priorities for the given indices.
 
     Args:
       indices: tensor of indices (int32), size k.
@@ -249,13 +277,11 @@ class WrappedPrioritizedReplayMemory(replay_memory.WrappedReplayMemory):
        A TF op setting the priorities according to Prioritized Experience
        Replay.
     """
-    return tf.py_func(
-        self.memory.set_priority, [indices, losses],
-        [],
-        name='prioritized_replay_set_priority_py_func')
+        return tf.py_func(self.memory.set_priority, [indices, losses], [],
+                          name='prioritized_replay_set_priority_py_func')
 
-  def tf_get_priority(self, indices):
-    """Gets the priorities for the given indices.
+    def tf_get_priority(self, indices):
+        """Gets the priorities for the given indices.
 
     Args:
       indices: tensor of indices (int32), size k.
@@ -263,7 +289,5 @@ class WrappedPrioritizedReplayMemory(replay_memory.WrappedReplayMemory):
     Returns:
        A tensor (float32) of priorities.
     """
-    return tf.py_func(
-        self.memory.get_priority, [indices],
-        [tf.float32],
-        name='prioritized_replay_get_priority_py_func')
+        return tf.py_func(self.memory.get_priority, [indices], [tf.float32],
+                          name='prioritized_replay_get_priority_py_func')
